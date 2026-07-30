@@ -9,3 +9,6 @@ tundra-ip
 *.swp
 *~
 .DS_Store
+
+# clang dir
+.cache/
