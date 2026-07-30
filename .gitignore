@@ -1,0 +1,11 @@
+# Build artifacts
+*.o
+*.a
+*.so
+tundra-ip
+/build/
+
+# Editor/OS cruft
+*.swp
+*~
+.DS_Store
