@@ -5,6 +5,9 @@
 tundra-ip
 /build/
 
+# Compilation
+/out/
+
 # Editor/OS cruft
 *.swp
 *~
