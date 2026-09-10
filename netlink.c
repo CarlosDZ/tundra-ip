@@ -42,3 +42,15 @@ ssize_t netlink_recv_msg(int fd, char *buff, size_t bufflen) {
 	}
 	return len;
 }
+
+void netlink_parse_dump(char *buff, ssize_t len,
+                        void (*callback)(struct nlmsghdr *nlh)) {
+	struct nlmsghdr *nlh = (struct nlmsghdr *)buff;
+
+	while (NLMSG_OK(nlh, len)) {
+		if (nlh->nlmsg_type == NLMSG_DONE)
+			break;
+		callback(nlh);
+		nlh = NLMSG_NEXT(nlh, len);
+	}
+}
