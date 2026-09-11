@@ -123,7 +123,9 @@ static void print_link(struct nlmsghdr *nlh, void *ctx) {
 	printf("\n");
 }
 
-int link_show(void) {
+int link_show(int verbose) {
+	(void)verbose;
+
 	struct iface_table ifaces;
 	iface_table_init(&ifaces);
 	if (iface_table_load(&ifaces) < 0) {
