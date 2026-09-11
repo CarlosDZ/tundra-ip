@@ -1,5 +1,6 @@
 #include "addr.h"
 #include "link.h"
+#include "route.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +14,10 @@ int main(int argc, char *argv[]) {
 	    strcmp(argv[2], "show") == 0)
 		return addr_show() < 0 ? 1 : 0;
 
-	fprintf(stderr, "usage: tundra-ip {link|addr} show\n");
+	if (argc >= 3 && strcmp(argv[1], "route") == 0 &&
+	    strcmp(argv[2], "show") == 0)
+		return route_show() < 0 ? 1 : 0;
+
+	fprintf(stderr, "usage: tundra-ip {link|addr|route} show\n");
 	return 1;
 }

@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE
 TARGET = tundra-ip
-OBJS = main.o netlink.o link.o addr.o
+OBJS = main.o netlink.o link.o addr.o route.o
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
@@ -17,6 +17,9 @@ link.o: link.c netlink.h
 
 addr.o: addr.c netlink.h
 	$(CC) $(CFLAGS) -c addr.c
+
+route.o: route.c netlink.h
+	$(CC) $(CFLAGS) -c route.c
 
 clean:
 	rm -f $(TARGET) $(OBJS)
