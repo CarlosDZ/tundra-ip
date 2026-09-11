@@ -1,7 +1,5 @@
-#include "addr.h"
 #include "color.h"
-#include "link.h"
-#include "route.h"
+#include "commands.h"
 
 #include <stdio.h>
 #include <string.h>
