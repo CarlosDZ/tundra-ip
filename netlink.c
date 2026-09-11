@@ -43,7 +43,8 @@ ssize_t netlink_recv_msg(int fd, char *buff, size_t bufflen) {
 	return len;
 }
 
-int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh)) {
+int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh, void *ctx),
+                      void *ctx) {
 	char buf[8192];
 
 	for (;;) {
@@ -63,7 +64,7 @@ int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh)) {
 				return -1;
 			}
 
-			callback(nlh);
+			callback(nlh, ctx);
 
 			nlh = NLMSG_NEXT(nlh, len);
 		}

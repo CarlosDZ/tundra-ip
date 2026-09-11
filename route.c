@@ -7,7 +7,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static void print_route(struct nlmsghdr *nlh) {
+static void print_route(struct nlmsghdr *nlh, void *ctx) {
+	(void)ctx;
+
 	if (nlh->nlmsg_type != RTM_NEWROUTE)
 		return;
 
@@ -52,7 +54,7 @@ int route_show(void) {
 		return -1;
 	}
 
-	int ret = netlink_recv_dump(fd, print_route);
+	int ret = netlink_recv_dump(fd, print_route, NULL);
 
 	close(fd);
 	return ret;

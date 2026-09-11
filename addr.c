@@ -7,7 +7,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static void print_addr(struct nlmsghdr *nlh) {
+static void print_addr(struct nlmsghdr *nlh, void *ctx) {
+	(void)ctx;
+
 	if (nlh->nlmsg_type != RTM_NEWADDR)
 		return;
 
@@ -35,7 +37,7 @@ int addr_show(void) {
 		return -1;
 	}
 
-	int ret = netlink_recv_dump(fd, print_addr);
+	int ret = netlink_recv_dump(fd, print_addr, NULL);
 
 	close(fd);
 	return ret;
