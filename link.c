@@ -10,6 +10,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+struct link_ctx {
+	struct iface_table *ifaces;
+	int verbose;
+};
+
 static const char *link_type_name(unsigned short type) {
 	switch (type) {
 	case ARPHRD_ETHER:
@@ -23,8 +28,52 @@ static const char *link_type_name(unsigned short type) {
 	}
 }
 
+static void print_all_flags(unsigned int flags) {
+	printf("\t<");
+	int first = 1;
+
+	struct {
+		unsigned int bit;
+		const char *name;
+	} table[] = {
+	    {IFF_UP, "UP"},
+	    {IFF_BROADCAST, "BROADCAST"},
+	    {IFF_DEBUG, "DEBUG"},
+	    {IFF_LOOPBACK, "LOOPBACK"},
+	    {IFF_POINTOPOINT, "POINTOPOINT"},
+	    {IFF_RUNNING, "RUNNING"},
+	    {IFF_NOARP, "NOARP"},
+	    {IFF_PROMISC, "PROMISC"},
+	    {IFF_ALLMULTI, "ALLMULTI"},
+	    {IFF_MASTER, "MASTER"},
+	    {IFF_SLAVE, "SLAVE"},
+	    {IFF_MULTICAST, "MULTICAST"},
+	    {IFF_DYNAMIC, "DYNAMIC"},
+	    {IFF_LOWER_UP, "LOWER_UP"},
+	    {IFF_DORMANT, "DORMANT"},
+	    {IFF_ECHO, "ECHO"},
+	};
+
+	for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++) {
+		if (flags & table[i].bit) {
+			printf("%s%s", first ? "" : ",", table[i].name);
+			first = 0;
+		}
+	}
+	printf(">\n");
+}
+
 static void print_link(struct nlmsghdr *nlh, void *ctx) {
-	struct iface_table *ifaces = ctx;
+	struct link_ctx *lc = ctx;
+	struct iface_table *ifaces = lc->ifaces;
+	int verbose = lc->verbose;
+
+	int mtu = -1;
+	char *qdisc = "";
+	int txqlen = -1;
+	int group = -1;
+	unsigned char *brd = NULL;
+	int brd_len = 0;
 
 	if (nlh->nlmsg_type != RTM_NEWLINK)
 		return;
@@ -54,7 +103,24 @@ static void print_link(struct nlmsghdr *nlh, void *ctx) {
 		case IFLA_MASTER:
 			master = *(int *)RTA_DATA(rta);
 			break;
+		case IFLA_MTU:
+			mtu = *(int *)RTA_DATA(rta);
+			break;
+		case IFLA_QDISC:
+			qdisc = RTA_DATA(rta);
+			break;
+		case IFLA_TXQLEN:
+			txqlen = *(int *)RTA_DATA(rta);
+			break;
+		case IFLA_GROUP:
+			group = *(int *)RTA_DATA(rta);
+			break;
+		case IFLA_BROADCAST:
+			brd = RTA_DATA(rta);
+			brd_len = RTA_PAYLOAD(rta);
+			break;
 		}
+
 		rta = RTA_NEXT(rta, rta_len);
 	}
 
@@ -120,12 +186,24 @@ static void print_link(struct nlmsghdr *nlh, void *ctx) {
 			printf(" master %d", master);
 	}
 
+	if (verbose) {
+		printf("\n");
+		print_all_flags(ifm->ifi_flags);
+
+		printf("\t[mtu %d]  [qdisc %s]  [txqlen %d]  [group %d]\n", mtu, qdisc,
+		       txqlen, group);
+
+		if (brd && brd_len == 6)
+			printf("\tbroadcast mac %02x:%02x:%02x:%02x:%02x:%02x", brd[0],
+			       brd[1], brd[2], brd[3], brd[4], brd[5]);
+		else
+			printf("\tno broadcast mac");
+	}
+
 	printf("\n");
 }
 
 int link_show(int verbose) {
-	(void)verbose;
-
 	struct iface_table ifaces;
 	iface_table_init(&ifaces);
 	if (iface_table_load(&ifaces) < 0) {
@@ -145,7 +223,8 @@ int link_show(int verbose) {
 		return -1;
 	}
 
-	int ret = netlink_recv_dump(fd, print_link, &ifaces);
+	struct link_ctx lc = {.ifaces = &ifaces, .verbose = verbose};
+	int ret = netlink_recv_dump(fd, print_link, &lc);
 
 	close(fd);
 	iface_table_free(&ifaces);
