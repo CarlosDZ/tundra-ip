@@ -9,7 +9,6 @@ int netlink_open(void);
 int netlink_send_dump_req(int fd, int type, int family);
 ssize_t netlink_recv_msg(int fd, char *buff, size_t bufflen);
 
-void netlink_parse_dump(char *buff, ssize_t len,
-                        void (*callback)(struct nlmsghdr *nlh));
+int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh));
 
 #endif

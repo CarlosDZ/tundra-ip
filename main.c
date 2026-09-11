@@ -1,15 +1,13 @@
-#include "netlink.h"
+#include "link.h"
 
 #include <stdio.h>
-#include <unistd.h>
+#include <string.h>
 
-int main(void) {
-	int fd = netlink_open();
-	if (fd < 0)
-		return 1;
+int main(int argc, char *argv[]) {
+	if (argc >= 3 && strcmp(argv[1], "link") == 0 &&
+	    strcmp(argv[2], "show") == 0)
+		return link_show() < 0 ? 1 : 0;
 
-	printf("tundra-ip: netlink ready, fd=%d\n", fd);
-
-	close(fd);
-	return 0;
+	fprintf(stderr, "usage: tundra-ip link show\n");
+	return 1;
 }
