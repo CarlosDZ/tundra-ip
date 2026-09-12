@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 
 	if (nargs >= 2 && strcmp(args[0], "addr") == 0 &&
 	    strcmp(args[1], "show") == 0)
-		return addr_show() < 0 ? 1 : 0;
+		return addr_show(verbose) < 0 ? 1 : 0;
 
 	if (nargs >= 2 && strcmp(args[0], "route") == 0 &&
 	    strcmp(args[1], "show") == 0)
