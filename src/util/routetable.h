@@ -29,5 +29,6 @@ void route_table_free(struct route_table *t);
 int route_table_load(struct route_table *t);
 int route_table_shown(int table, int verbose, int local);
 int route_family_shown(int family, int verbose);
+const char *route_table_name(int table);
 
 #endif

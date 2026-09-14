@@ -191,6 +191,7 @@ int status_show(int verbose, int local) {
 				       scope_name(r->scope));
 				if (r->src[0] != '\0')
 					printf(" [src %s]", r->src);
+				printf(" [table %s]", route_table_name(r->table));
 			}
 			printf("\n");
 		}

@@ -3,8 +3,25 @@
 
 #include <arpa/inet.h>
 #include <linux/rtnetlink.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+
+const char *route_table_name(int table) {
+	switch (table) {
+	case RT_TABLE_MAIN:
+		return "main";
+	case RT_TABLE_LOCAL:
+		return "local";
+	case RT_TABLE_DEFAULT:
+		return "default";
+	default: {
+		static char buf[16];
+		snprintf(buf, sizeof(buf), "%d", table);
+		return buf;
+	}
+	}
+}
 
 int route_table_shown(int table, int verbose, int local) {
 	if (table == RT_TABLE_MAIN)
