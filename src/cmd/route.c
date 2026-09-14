@@ -149,6 +149,32 @@ static void print_one_route(const struct route_entry *r, int verbose,
 	printf("\n");
 }
 
+static void print_no_iface(int only_table, struct route_table *routes,
+                           int verbose, int local, const char *indent) {
+	int has = 0;
+	for (int j = 0; j < routes->count; j++) {
+		struct route_entry *r = &routes->items[j];
+		if (r->oif == -1 && table_shown(r->table, verbose, local) &&
+		    family_shown(r->family, verbose) &&
+		    (only_table == -1 || r->table == only_table)) {
+			has = 1;
+			break;
+		}
+	}
+	if (!has)
+		return;
+
+	printf("%sno interface:\n", indent);
+
+	for (int j = 0; j < routes->count; j++) {
+		struct route_entry *r = &routes->items[j];
+		if (r->oif == -1 && table_shown(r->table, verbose, local) &&
+		    family_shown(r->family, verbose) &&
+		    (only_table == -1 || r->table == only_table))
+			print_one_route(r, verbose, indent);
+	}
+}
+
 static void print_routes_by_iface(int only_table, struct iface_table *ifaces,
                                   struct route_table *routes, int verbose,
                                   int local, const char *indent) {
@@ -221,11 +247,13 @@ int route_show(int verbose, int local) {
 
 	if (ntables <= 1) {
 		print_routes_by_iface(-1, &ifaces, &routes, verbose, local, "");
+		print_no_iface(-1, &routes, verbose, local, "");
 	} else {
 		for (int t = 0; t < ntables; t++) {
 			printf("%s:\n", table_name(tables[t]));
 			print_routes_by_iface(tables[t], &ifaces, &routes, verbose, local,
 			                      "\t");
+			print_no_iface(tables[t], &routes, verbose, local, "\t");
 		}
 	}
 
