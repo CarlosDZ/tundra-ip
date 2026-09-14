@@ -1,5 +1,6 @@
 #include "addr.h"
 #include "../util/addrtable.h"
+#include "../util/rtnames.h"
 #include "color.h"
 #include "iface.h"
 #include "netlink.h"
@@ -49,19 +50,6 @@ static void collect_addr(struct nlmsghdr *nlh, void *ctx) {
 
 	if (have_ip)
 		addr_table_add(at, &e);
-}
-
-static const char *scope_name(int scope) {
-	switch (scope) {
-	case RT_SCOPE_UNIVERSE:
-		return "global";
-	case RT_SCOPE_HOST:
-		return "host";
-	case RT_SCOPE_LINK:
-		return "link";
-	default:
-		return "other";
-	}
 }
 
 static void print_addr_flags(unsigned int flags) {

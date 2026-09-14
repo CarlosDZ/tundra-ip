@@ -1,61 +1,235 @@
 #include "route.h"
-#include "netlink.h"
+#include "../util/color.h"
+#include "../util/iface.h"
+#include "../util/routetable.h"
+#include "../util/rtnames.h"
 
 #include <arpa/inet.h>
 #include <linux/rtnetlink.h>
+#include <netlink.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-static void print_route(struct nlmsghdr *nlh, void *ctx) {
-	(void)ctx;
+static int table_shown(int table, int verbose, int local) {
+	if (table == RT_TABLE_MAIN)
+		return 1;
+	if (table == RT_TABLE_LOCAL)
+		return local;
+	return verbose;
+}
 
+static int family_shown(int family, int verbose) {
+	if (family == AF_INET)
+		return 1;
+	if (family == AF_INET6)
+		return verbose;
+	return 0;
+}
+
+static const char *table_name(int table) {
+	switch (table) {
+	case RT_TABLE_MAIN:
+		return "main";
+	case RT_TABLE_LOCAL:
+		return "local";
+	case RT_TABLE_DEFAULT:
+		return "default";
+	default: {
+		static char buf[16];
+		snprintf(buf, sizeof(buf), "%d", table);
+		return buf;
+	}
+	}
+}
+
+static int route_visible(const struct route_entry *r, int idx, int only_table,
+                         int verbose, int local) {
+	if (r->oif != idx)
+		return 0;
+	if (!family_shown(r->family, verbose))
+		return 0;
+	if (!table_shown(r->table, verbose, local))
+		return 0;
+	if (only_table != -1 && r->table != only_table)
+		return 0;
+	return 1;
+}
+
+static void collect_route(struct nlmsghdr *nlh, void *ctx) {
 	if (nlh->nlmsg_type != RTM_NEWROUTE)
 		return;
 
+	struct route_table *rt = ctx;
 	struct rtmsg *rtm = NLMSG_DATA(nlh);
 
-	if (rtm->rtm_family != AF_INET)
-		return;
+	struct route_entry e;
+	e.table = rtm->rtm_table;
+	e.family = rtm->rtm_family;
+	e.dst_len = rtm->rtm_dst_len;
+	e.proto = rtm->rtm_protocol;
+	e.scope = rtm->rtm_scope;
+	e.oif = -1;
+	e.dst[0] = '\0';
+	e.gw[0] = '\0';
+	e.src[0] = '\0';
+	e.has_metric = 0;
+	e.metric = 0;
 
 	struct rtattr *rta = RTM_RTA(rtm);
 	int rta_len = RTM_PAYLOAD(nlh);
 
-	char dst[INET_ADDRSTRLEN] = "default";
-	char gw[INET_ADDRSTRLEN] = "";
-	int oif = -1;
-
 	while (RTA_OK(rta, rta_len)) {
-		if (rta->rta_type == RTA_DST)
-			inet_ntop(AF_INET, RTA_DATA(rta), dst, sizeof(dst));
-		else if (rta->rta_type == RTA_GATEWAY)
-			inet_ntop(AF_INET, RTA_DATA(rta), gw, sizeof(gw));
-		else if (rta->rta_type == RTA_OIF)
-			oif = *(int *)RTA_DATA(rta);
-
+		switch (rta->rta_type) {
+		case RTA_DST:
+			inet_ntop(e.family, RTA_DATA(rta), e.dst, sizeof(e.dst));
+			break;
+		case RTA_GATEWAY:
+			inet_ntop(e.family, RTA_DATA(rta), e.gw, sizeof(e.gw));
+			break;
+		case RTA_PREFSRC:
+			inet_ntop(e.family, RTA_DATA(rta), e.src, sizeof(e.src));
+			break;
+		case RTA_OIF:
+			e.oif = *(int *)RTA_DATA(rta);
+			break;
+		case RTA_PRIORITY:
+			e.metric = *(unsigned int *)RTA_DATA(rta);
+			e.has_metric = 1;
+			break;
+		}
 		rta = RTA_NEXT(rta, rta_len);
 	}
 
-	printf("%s/%d", dst, rtm->rtm_dst_len);
-	if (gw[0] != '\0')
-		printf(" via %s", gw);
-	if (oif != -1)
-		printf(" oif %d", oif);
+	route_table_add(rt, &e);
+}
+
+static void print_one_route(const struct route_entry *r, int verbose,
+                            const char *indent) {
+	char metric[16];
+	if (r->has_metric)
+		snprintf(metric, sizeof(metric), "[%u]", r->metric);
+	else
+		snprintf(metric, sizeof(metric), "[-]");
+
+	int metric_len = strlen(metric);
+	int metric_width = 7; /* ancho de columna para la metrica */
+
+	printf("%s\t%s%s%s", indent, c_cyan, metric, c_reset);
+	for (int i = metric_len; i < metric_width; i++)
+		putchar(' ');
+	putchar(' ');
+
+	char buf[128];
+	int n = 0;
+	if (r->dst[0] == '\0')
+		n += snprintf(buf + n, sizeof(buf) - n, "default");
+	else
+		n += snprintf(buf + n, sizeof(buf) - n, "%s/%d", r->dst, r->dst_len);
+	if (r->gw[0] != '\0')
+		n += snprintf(buf + n, sizeof(buf) - n, " via %s", r->gw);
+
+	if (r->dst[0] == '\0')
+		printf("%s%s%s%s", c_green, "default", c_reset,
+		       buf + strlen("default"));
+	else
+		printf("%s", buf);
+
+	if (verbose) {
+		int pad = (n < 36) ? 36 - n : 1;
+		for (int i = 0; i < pad; i++)
+			putchar(' ');
+		printf("[proto %s] [scope %s]", proto_name(r->proto),
+		       scope_name(r->scope));
+		if (r->src[0] != '\0')
+			printf(" [src %s]", r->src);
+	}
+
 	printf("\n");
 }
 
-int route_show(void) {
-	int fd = netlink_open();
-	if (fd < 0)
-		return -1;
+static void print_routes_by_iface(int only_table, struct iface_table *ifaces,
+                                  struct route_table *routes, int verbose,
+                                  int local, const char *indent) {
+	for (int i = 0; i < ifaces->count; i++) {
+		int idx = ifaces->items[i].index;
+		int has = 0;
+		for (int j = 0; j < routes->count; j++) {
+			if (route_visible(&routes->items[j], idx, only_table, verbose,
+			                  local)) {
+				has = 1;
+				break;
+			}
+		}
+		if (!has)
+			continue;
 
-	if (netlink_send_dump_req(fd, RTM_GETROUTE, AF_UNSPEC) < 0) {
-		close(fd);
+		printf("%s%s:\n", indent, ifaces->items[i].name);
+
+		for (int j = 0; j < routes->count; j++) {
+			struct route_entry *r = &routes->items[j];
+			if (route_visible(r, idx, only_table, verbose, local))
+				print_one_route(r, verbose, indent);
+		}
+	}
+}
+
+int route_show(int verbose, int local) {
+	struct iface_table ifaces;
+	iface_table_init(&ifaces);
+	if (iface_table_load(&ifaces) < 0) {
+		iface_table_free(&ifaces);
 		return -1;
 	}
 
-	int ret = netlink_recv_dump(fd, print_route, NULL);
+	struct route_table routes;
+	route_table_init(&routes);
 
+	int fd = netlink_open();
+	if (fd < 0) {
+		route_table_free(&routes);
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	if (netlink_send_dump_req(fd, RTM_GETROUTE, AF_UNSPEC) < 0) {
+		close(fd);
+		route_table_free(&routes);
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	int ret = netlink_recv_dump(fd, collect_route, &routes);
 	close(fd);
+
+	int tables[64];
+	int ntables = 0;
+	for (int j = 0; j < routes.count; j++) {
+		struct route_entry *r = &routes.items[j];
+		if (!table_shown(r->table, verbose, local))
+			continue;
+		if (!family_shown(r->family, verbose))
+			continue;
+		int seen = 0;
+		for (int t = 0; t < ntables; t++)
+			if (tables[t] == r->table) {
+				seen = 1;
+				break;
+			}
+		if (!seen && ntables < 64)
+			tables[ntables++] = r->table;
+	}
+
+	if (ntables <= 1) {
+		print_routes_by_iface(-1, &ifaces, &routes, verbose, local, "");
+	} else {
+		for (int t = 0; t < ntables; t++) {
+			printf("%s:\n", table_name(tables[t]));
+			print_routes_by_iface(tables[t], &ifaces, &routes, verbose, local,
+			                      "\t");
+		}
+	}
+
+	route_table_free(&routes);
+	iface_table_free(&ifaces);
 	return ret;
 }
