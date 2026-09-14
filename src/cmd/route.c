@@ -12,22 +12,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static int table_shown(int table, int verbose, int local) {
-	if (table == RT_TABLE_MAIN)
-		return 1;
-	if (table == RT_TABLE_LOCAL)
-		return local;
-	return verbose;
-}
-
-static int family_shown(int family, int verbose) {
-	if (family == AF_INET)
-		return 1;
-	if (family == AF_INET6)
-		return verbose;
-	return 0;
-}
-
 static const char *table_name(int table) {
 	switch (table) {
 	case RT_TABLE_MAIN:
@@ -48,9 +32,9 @@ static int route_visible(const struct route_entry *r, int idx, int only_table,
                          int verbose, int local) {
 	if (r->oif != idx)
 		return 0;
-	if (!family_shown(r->family, verbose))
+	if (!route_family_shown(r->family, verbose))
 		return 0;
-	if (!table_shown(r->table, verbose, local))
+	if (!route_table_shown(r->table, verbose, local))
 		return 0;
 	if (only_table != -1 && r->table != only_table)
 		return 0;
@@ -106,8 +90,8 @@ static void print_no_iface(int only_table, struct route_table *routes,
 	int has = 0;
 	for (int j = 0; j < routes->count; j++) {
 		struct route_entry *r = &routes->items[j];
-		if (r->oif == -1 && table_shown(r->table, verbose, local) &&
-		    family_shown(r->family, verbose) &&
+		if (r->oif == -1 && route_table_shown(r->table, verbose, local) &&
+		    route_family_shown(r->family, verbose) &&
 		    (only_table == -1 || r->table == only_table)) {
 			has = 1;
 			break;
@@ -120,8 +104,8 @@ static void print_no_iface(int only_table, struct route_table *routes,
 
 	for (int j = 0; j < routes->count; j++) {
 		struct route_entry *r = &routes->items[j];
-		if (r->oif == -1 && table_shown(r->table, verbose, local) &&
-		    family_shown(r->family, verbose) &&
+		if (r->oif == -1 && route_table_shown(r->table, verbose, local) &&
+		    route_family_shown(r->family, verbose) &&
 		    (only_table == -1 || r->table == only_table))
 			print_one_route(r, verbose, indent);
 	}
@@ -173,9 +157,9 @@ int route_show(int verbose, int local) {
 	int ntables = 0;
 	for (int j = 0; j < routes.count; j++) {
 		struct route_entry *r = &routes.items[j];
-		if (!table_shown(r->table, verbose, local))
+		if (!route_table_shown(r->table, verbose, local))
 			continue;
-		if (!family_shown(r->family, verbose))
+		if (!route_family_shown(r->family, verbose))
 			continue;
 		int seen = 0;
 		for (int t = 0; t < ntables; t++)

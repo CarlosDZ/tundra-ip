@@ -6,6 +6,22 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 
+int route_table_shown(int table, int verbose, int local) {
+	if (table == RT_TABLE_MAIN)
+		return 1;
+	if (table == RT_TABLE_LOCAL)
+		return local;
+	return verbose;
+}
+
+int route_family_shown(int family, int verbose) {
+	if (family == AF_INET)
+		return 1;
+	if (family == AF_INET6)
+		return verbose;
+	return 0;
+}
+
 static void collect_route(struct nlmsghdr *nlh, void *ctx) {
 	if (nlh->nlmsg_type != RTM_NEWROUTE)
 		return;

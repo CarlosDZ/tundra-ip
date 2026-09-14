@@ -52,6 +52,11 @@ static void collect_iface(struct nlmsghdr *nlh, void *ctx) {
 	e.operstate = -1;
 	e.has_mac = 0;
 	e.name[0] = '\0';
+	e.mtu = -1;
+	e.qdisc[0] = '\0';
+	e.txqlen = -1;
+	e.group = -1;
+	e.has_broadcast = 0;
 
 	while (RTA_OK(rta, rta_len)) {
 		switch (rta->rta_type) {
@@ -65,6 +70,24 @@ static void collect_iface(struct nlmsghdr *nlh, void *ctx) {
 			if (RTA_PAYLOAD(rta) == 6) {
 				memcpy(e.mac, RTA_DATA(rta), 6);
 				e.has_mac = 1;
+			}
+			break;
+		case IFLA_MTU:
+			e.mtu = *(int *)RTA_DATA(rta);
+			break;
+		case IFLA_QDISC:
+			snprintf(e.qdisc, sizeof(e.qdisc), "%s", (char *)RTA_DATA(rta));
+			break;
+		case IFLA_TXQLEN:
+			e.txqlen = *(int *)RTA_DATA(rta);
+			break;
+		case IFLA_GROUP:
+			e.group = *(int *)RTA_DATA(rta);
+			break;
+		case IFLA_BROADCAST:
+			if (RTA_PAYLOAD(rta) == 6) {
+				memcpy(e.broadcast, RTA_DATA(rta), 6);
+				e.has_broadcast = 1;
 			}
 			break;
 		}

@@ -9,6 +9,12 @@ struct iface {
 	unsigned char mac[6];
 	int has_mac;
 	unsigned int flags;
+	int mtu;
+	char qdisc[16];
+	int txqlen;
+	int group;
+	unsigned char broadcast[6];
+	int has_broadcast;
 };
 
 struct iface_table {
