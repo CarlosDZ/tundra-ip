@@ -1,6 +1,62 @@
 #include "routetable.h"
+#include "netlink.h"
 
+#include <arpa/inet.h>
+#include <linux/rtnetlink.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+
+static void collect_route(struct nlmsghdr *nlh, void *ctx) {
+	if (nlh->nlmsg_type != RTM_NEWROUTE)
+		return;
+
+	struct route_table *rt = ctx;
+	struct rtmsg *rtm = NLMSG_DATA(nlh);
+
+	struct route_entry e;
+	e.table = rtm->rtm_table;
+	e.family = rtm->rtm_family;
+	e.dst_len = rtm->rtm_dst_len;
+	e.proto = rtm->rtm_protocol;
+	e.scope = rtm->rtm_scope;
+	e.oif = -1;
+	e.dst[0] = '\0';
+	e.gw[0] = '\0';
+	e.src[0] = '\0';
+	e.has_metric = 0;
+	e.metric = 0;
+
+	struct rtattr *rta = RTM_RTA(rtm);
+	int rta_len = RTM_PAYLOAD(nlh);
+
+	while (RTA_OK(rta, rta_len)) {
+		switch (rta->rta_type) {
+		case RTA_DST:
+			inet_ntop(e.family, RTA_DATA(rta), e.dst, sizeof(e.dst));
+			break;
+		case RTA_GATEWAY:
+			inet_ntop(e.family, RTA_DATA(rta), e.gw, sizeof(e.gw));
+			break;
+		case RTA_PREFSRC:
+			inet_ntop(e.family, RTA_DATA(rta), e.src, sizeof(e.src));
+			break;
+		case RTA_OIF:
+			e.oif = *(int *)RTA_DATA(rta);
+			break;
+		case RTA_PRIORITY:
+			e.metric = *(unsigned int *)RTA_DATA(rta);
+			e.has_metric = 1;
+			break;
+		}
+		rta = RTA_NEXT(rta, rta_len);
+	}
+
+	route_table_add(rt, &e);
+}
+
+int route_table_load(struct route_table *t) {
+	return netlink_dump(RTM_GETROUTE, AF_UNSPEC, collect_route, t);
+}
 
 void route_table_init(struct route_table *t) {
 	t->items = NULL;

@@ -1,8 +1,6 @@
 #include "parser.h"
 
-#include "addr.h"
-#include "link.h"
-#include "route.h"
+#include "cmd/commands.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +11,9 @@ static int cmd_addr_show(int flags) { return addr_show(flags & FLAG_VERBOSE); }
 
 static int cmd_route_show(int flags) {
 	return route_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
+}
+static int cmd_status(int flags) {
+	return status_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
 }
 
 struct flag_def {
@@ -36,6 +37,7 @@ static const struct command commands[] = {
     {"link", "show", FLAG_VERBOSE, cmd_link_show},
     {"addr", "show", FLAG_VERBOSE, cmd_addr_show},
     {"route", "show", FLAG_VERBOSE | FLAG_LOCAL, cmd_route_show},
+    {"status", "", FLAG_VERBOSE | FLAG_LOCAL, cmd_status},
 };
 
 static void print_flag_names(int mask) {
@@ -80,21 +82,28 @@ int parse_and_dispatch(int argc, char *argv[]) {
 		}
 	}
 
-	if (npos < 2) {
-		fprintf(stderr, "usage: tundra-ip <object> <action> [options]\n");
+	if (npos < 1) {
+		fprintf(stderr, "usage: tundra-ip <command> [options]\n");
 		return 1;
 	}
 
 	for (size_t c = 0; c < sizeof(commands) / sizeof(commands[0]); c++) {
-		if (strcmp(pos[0], commands[c].obj) == 0 &&
-		    strcmp(pos[1], commands[c].action) == 0) {
+		int obj_match = strcmp(pos[0], commands[c].obj) == 0;
+		int action_match;
+		if (commands[c].action[0] == '\0')
+			action_match = 1;
+		else
+			action_match =
+			    (npos >= 2 && strcmp(pos[1], commands[c].action) == 0);
+
+		if (obj_match && action_match) {
 			int bad = flags & ~commands[c].allowed_flags;
 			if (bad) {
 				fprintf(stderr, "invalid option ");
 				print_flag_names(bad);
 				fprintf(stderr,
-				        " for '%s %s'. Available options: ", commands[c].obj,
-				        commands[c].action);
+				        " for '%s%s%s'. Available options: ", commands[c].obj,
+				        commands[c].action[0] ? " " : "", commands[c].action);
 				if (commands[c].allowed_flags)
 					print_flag_names(commands[c].allowed_flags);
 				else

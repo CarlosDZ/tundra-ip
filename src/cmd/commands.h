@@ -5,6 +5,7 @@
 #include "addr.h"
 #include "link.h"
 #include "route.h"
+#include "status.h"
 // IWYU pragma: end_exports
 
 #endif

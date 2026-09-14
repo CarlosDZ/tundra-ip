@@ -12,4 +12,7 @@ ssize_t netlink_recv_msg(int fd, char *buff, size_t bufflen);
 int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh, void *ctx),
                       void *ctx);
 
+int netlink_dump(int type, int family,
+                 void (*callback)(struct nlmsghdr *nlh, void *ctx), void *ctx);
+
 #endif

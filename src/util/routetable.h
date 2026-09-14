@@ -26,5 +26,6 @@ struct route_table {
 void route_table_init(struct route_table *t);
 int route_table_add(struct route_table *t, const struct route_entry *e);
 void route_table_free(struct route_table *t);
+int route_table_load(struct route_table *t);
 
 #endif

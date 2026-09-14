@@ -23,5 +23,6 @@ struct addr_table {
 void addr_table_init(struct addr_table *t);
 int addr_table_add(struct addr_table *t, const struct addr_entry *e);
 void addr_table_free(struct addr_table *t);
+int addr_table_load(struct addr_table *t);
 
 #endif

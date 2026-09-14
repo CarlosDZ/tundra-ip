@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 int netlink_open(void) {
 	int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
@@ -69,4 +70,20 @@ int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh, void *ctx),
 			nlh = NLMSG_NEXT(nlh, len);
 		}
 	}
+}
+
+int netlink_dump(int type, int family,
+                 void (*callback)(struct nlmsghdr *nlh, void *ctx), void *ctx) {
+	int fd = netlink_open();
+	if (fd < 0)
+		return -1;
+
+	if (netlink_send_dump_req(fd, type, family) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	int ret = netlink_recv_dump(fd, callback, ctx);
+	close(fd);
+	return ret;
 }

@@ -57,54 +57,6 @@ static int route_visible(const struct route_entry *r, int idx, int only_table,
 	return 1;
 }
 
-static void collect_route(struct nlmsghdr *nlh, void *ctx) {
-	if (nlh->nlmsg_type != RTM_NEWROUTE)
-		return;
-
-	struct route_table *rt = ctx;
-	struct rtmsg *rtm = NLMSG_DATA(nlh);
-
-	struct route_entry e;
-	e.table = rtm->rtm_table;
-	e.family = rtm->rtm_family;
-	e.dst_len = rtm->rtm_dst_len;
-	e.proto = rtm->rtm_protocol;
-	e.scope = rtm->rtm_scope;
-	e.oif = -1;
-	e.dst[0] = '\0';
-	e.gw[0] = '\0';
-	e.src[0] = '\0';
-	e.has_metric = 0;
-	e.metric = 0;
-
-	struct rtattr *rta = RTM_RTA(rtm);
-	int rta_len = RTM_PAYLOAD(nlh);
-
-	while (RTA_OK(rta, rta_len)) {
-		switch (rta->rta_type) {
-		case RTA_DST:
-			inet_ntop(e.family, RTA_DATA(rta), e.dst, sizeof(e.dst));
-			break;
-		case RTA_GATEWAY:
-			inet_ntop(e.family, RTA_DATA(rta), e.gw, sizeof(e.gw));
-			break;
-		case RTA_PREFSRC:
-			inet_ntop(e.family, RTA_DATA(rta), e.src, sizeof(e.src));
-			break;
-		case RTA_OIF:
-			e.oif = *(int *)RTA_DATA(rta);
-			break;
-		case RTA_PRIORITY:
-			e.metric = *(unsigned int *)RTA_DATA(rta);
-			e.has_metric = 1;
-			break;
-		}
-		rta = RTA_NEXT(rta, rta_len);
-	}
-
-	route_table_add(rt, &e);
-}
-
 static void print_one_route(const struct route_entry *r, int verbose,
                             const char *indent) {
 	char metric[16];
@@ -211,21 +163,11 @@ int route_show(int verbose, int local) {
 
 	struct route_table routes;
 	route_table_init(&routes);
-
-	int fd = netlink_open();
-	if (fd < 0) {
+	if (route_table_load(&routes) < 0) {
 		route_table_free(&routes);
 		iface_table_free(&ifaces);
 		return -1;
 	}
-	if (netlink_send_dump_req(fd, RTM_GETROUTE, AF_UNSPEC) < 0) {
-		close(fd);
-		route_table_free(&routes);
-		iface_table_free(&ifaces);
-		return -1;
-	}
-	int ret = netlink_recv_dump(fd, collect_route, &routes);
-	close(fd);
 
 	int tables[64];
 	int ntables = 0;
@@ -259,5 +201,5 @@ int route_show(int verbose, int local) {
 
 	route_table_free(&routes);
 	iface_table_free(&ifaces);
-	return ret;
+	return 0;
 }
