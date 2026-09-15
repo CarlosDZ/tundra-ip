@@ -1,6 +1,6 @@
 #include "parser.h"
-
 #include "cmd/commands.h"
+#include "help.h"
 
 #include <linux/rtnetlink.h>
 #include <stdio.h>
@@ -17,6 +17,8 @@ static int split_prefix(const char *arg, char *addr_out, size_t size,
 	*prefix_out = atoi(slash + 1);
 	return 0;
 }
+
+static void print_version(void) { printf("tundra-ip %s\n", TUNDRA_IP_VERSION); }
 
 static int cmd_link_show(int flags, char **args, int nargs) {
 	(void)args;
@@ -267,9 +269,21 @@ int parse_and_dispatch(int argc, char *argv[]) {
 	int flags = 0;
 	char *pos[argc];
 	int npos = 0;
+	int want_help = 0;
 
 	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--version") == 0) {
+			print_version();
+			return 0;
+		}
+		if (strcmp(argv[i], "--help") == 0)
+			want_help = 1;
+
 		if (strncmp(argv[i], "--", 2) == 0) {
+			if (strcmp(argv[i], "--help") == 0 ||
+			    strcmp(argv[i], "--version") == 0)
+				continue;
+
 			int found = 0;
 			for (size_t f = 0; f < sizeof(known_flags) / sizeof(known_flags[0]);
 			     f++) {
@@ -293,6 +307,11 @@ int parse_and_dispatch(int argc, char *argv[]) {
 		} else {
 			pos[npos++] = argv[i];
 		}
+	}
+
+	if (want_help) {
+		help_show(npos >= 1 ? pos[0] : NULL);
+		return 0;
 	}
 
 	if (npos < 1) {
