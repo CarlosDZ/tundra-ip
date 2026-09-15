@@ -166,3 +166,45 @@ int addr_add(const char *ip, int prefixlen, const char *ifname) {
 int addr_del(const char *ip, int prefixlen, const char *ifname) {
 	return addr_modify(RTM_DELADDR, 0, ip, prefixlen, ifname);
 }
+
+int addr_flush(const char *ifname) {
+	struct iface_table ifaces;
+	iface_table_init(&ifaces);
+	if (iface_table_load(&ifaces) < 0) {
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	int ifindex = -1;
+	for (int i = 0; i < ifaces.count; i++)
+		if (strcmp(ifaces.items[i].name, ifname) == 0) {
+			ifindex = ifaces.items[i].index;
+			break;
+		}
+	iface_table_free(&ifaces);
+
+	if (ifindex == -1) {
+		fprintf(stderr, "interface not found: %s\n", ifname);
+		return -1;
+	}
+
+	struct addr_table addrs;
+	addr_table_init(&addrs);
+	if (addr_table_load(&addrs) < 0) {
+		addr_table_free(&addrs);
+		return -1;
+	}
+
+	int ret = 0;
+	for (int i = 0; i < addrs.count; i++) {
+		struct addr_entry *a = &addrs.items[i];
+		if (a->ifindex != ifindex)
+			continue;
+		if (strchr(a->ip, ':'))
+			continue;
+		if (addr_del(a->ip, a->prefixlen, ifname) < 0)
+			ret = -1;
+	}
+
+	addr_table_free(&addrs);
+	return ret;
+}

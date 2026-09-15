@@ -69,6 +69,17 @@ static int cmd_addr_del(int flags, char **args, int nargs) {
 	return addr_del(ip, prefix, ifname) < 0 ? 1 : 0;
 }
 
+static int cmd_addr_flush(int flags, char **args, int nargs) {
+	(void)flags;
+
+	if (nargs != 2 || strcmp(args[0], "on") != 0) {
+		fprintf(stderr, "usage: tundra-ip addr flush on <interface>\n");
+		return 1;
+	}
+
+	return addr_flush(args[1]) < 0 ? 1 : 0;
+}
+
 struct flag_def {
 	const char *name;
 	int bit;
@@ -93,6 +104,7 @@ static const struct command commands[] = {
     {"status", "", FLAG_VERBOSE | FLAG_LOCAL, cmd_status},
     {"addr", "add", 0, cmd_addr_add},
     {"addr", "del", 0, cmd_addr_del},
+    {"addr", "flush", 0, cmd_addr_flush},
 };
 
 static void print_flag_names(int mask) {

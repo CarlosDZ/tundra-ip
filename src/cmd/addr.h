@@ -4,5 +4,6 @@
 int addr_show(int verbose);
 int addr_add(const char *ip, int prefixlen, const char *ifname);
 int addr_del(const char *ip, int prefixlen, const char *ifname);
+int addr_flush(const char *ifname);
 
 #endif
