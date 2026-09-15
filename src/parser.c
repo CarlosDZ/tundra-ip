@@ -2,9 +2,21 @@
 
 #include "cmd/commands.h"
 
+#include <linux/rtnetlink.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int split_prefix(const char *arg, char *addr_out, size_t size,
+                        int *prefix_out) {
+	snprintf(addr_out, size, "%s", arg);
+	char *slash = strchr(addr_out, '/');
+	if (!slash)
+		return -1;
+	*slash = '\0';
+	*prefix_out = atoi(slash + 1);
+	return 0;
+}
 
 static int cmd_link_show(int flags, char **args, int nargs) {
 	(void)args;
@@ -33,12 +45,8 @@ static int parse_addr_args(char **args, int nargs, char *ip_out, size_t ip_size,
                            int *prefix_out, const char **if_out) {
 	if (nargs != 3 || strcmp(args[1], "on") != 0)
 		return -1;
-	snprintf(ip_out, ip_size, "%s", args[0]);
-	char *slash = strchr(ip_out, '/');
-	if (!slash)
+	if (split_prefix(args[0], ip_out, ip_size, prefix_out) < 0)
 		return -1;
-	*slash = '\0';
-	*prefix_out = atoi(slash + 1);
 	*if_out = args[2];
 	return 0;
 }
@@ -115,6 +123,102 @@ static int cmd_link_set_mac(int flags, char **args, int nargs) {
 	return 1;
 }
 
+static int cmd_route_add(int flags, char **args, int nargs) {
+	(void)flags;
+
+	if (nargs < 1) {
+		fprintf(stderr, "usage: tundra-ip route add <net>/<prefix>|default "
+		                "[via <gw>] on <interface> [metric <n>]\n");
+		return 1;
+	}
+
+	const char *dst = NULL;
+	int prefix = 0;
+	char netbuf[64];
+	if (strcmp(args[0], "default") != 0) {
+		if (split_prefix(args[0], netbuf, sizeof(netbuf), &prefix) < 0) {
+			fprintf(stderr, "missing prefix: %s (expected net/prefix)\n",
+			        args[0]);
+			return 1;
+		}
+		dst = netbuf;
+	}
+
+	const char *gw = NULL;
+	const char *ifname = NULL;
+	int has_metric = 0;
+	unsigned int metric = 0;
+
+	for (int i = 1; i < nargs; i++) {
+		if (strcmp(args[i], "via") == 0 && i + 1 < nargs) {
+			gw = args[++i];
+		} else if (strcmp(args[i], "on") == 0 && i + 1 < nargs) {
+			ifname = args[++i];
+		} else if (strcmp(args[i], "metric") == 0 && i + 1 < nargs) {
+			metric = (unsigned int)atoi(args[++i]);
+			has_metric = 1;
+		} else {
+			fprintf(stderr, "unexpected argument: %s\n", args[i]);
+			return 1;
+		}
+	}
+
+	if (ifname == NULL) {
+		fprintf(stderr, "missing 'on <interface>'\n");
+		return 1;
+	}
+	if (dst == NULL && gw == NULL) {
+		fprintf(stderr, "default route requires 'via <gateway>'\n");
+		return 1;
+	}
+
+	return route_add(dst, prefix, gw, ifname, has_metric, metric) < 0 ? 1 : 0;
+}
+
+static int cmd_route_del(int flags, char **args, int nargs) {
+	(void)flags;
+
+	if (nargs < 1) {
+		fprintf(stderr, "usage: tundra-ip route del <net>/<prefix>|default [on "
+		                "<interface>]\n");
+		return 1;
+	}
+
+	const char *dst = NULL;
+	int prefix = 0;
+	char netbuf[64];
+	if (strcmp(args[0], "default") != 0) {
+		if (split_prefix(args[0], netbuf, sizeof(netbuf), &prefix) < 0) {
+			fprintf(stderr, "missing prefix: %s (expected net/prefix)\n",
+			        args[0]);
+			return 1;
+		}
+		dst = netbuf;
+	}
+
+	const char *ifname = NULL;
+	for (int i = 1; i < nargs; i++) {
+		if (strcmp(args[i], "on") == 0 && i + 1 < nargs) {
+			ifname = args[++i];
+		} else {
+			fprintf(stderr, "unexpected argument: %s\n", args[i]);
+			return 1;
+		}
+	}
+
+	return route_del(dst, prefix, ifname, RT_TABLE_MAIN) < 0 ? 1 : 0;
+}
+
+static int cmd_route_flush(int flags, char **args, int nargs) {
+	if (nargs != 2 || strcmp(args[0], "on") != 0) {
+		fprintf(stderr,
+		        "usage: tundra-ip route flush on <interface> [--all]\n");
+		return 1;
+	}
+	int all = (flags & FLAG_ALL) ? 1 : 0;
+	return route_flush(args[1], all) < 0 ? 1 : 0;
+}
+
 struct flag_def {
 	const char *name;
 	int bit;
@@ -123,6 +227,7 @@ struct flag_def {
 static const struct flag_def known_flags[] = {
     {"--verbose", FLAG_VERBOSE},
     {"--local", FLAG_LOCAL},
+    {"--all", FLAG_ALL},
 };
 
 struct command {
@@ -143,6 +248,9 @@ static const struct command commands[] = {
     {"link", "up", 0, cmd_link_up},
     {"link", "down", 0, cmd_link_down},
     {"link", "set", 0, cmd_link_set_mac},
+    {"route", "add", 0, cmd_route_add},
+    {"route", "del", 0, cmd_route_del},
+    {"route", "flush", FLAG_ALL, cmd_route_flush},
 };
 
 static void print_flag_names(int mask) {
@@ -199,11 +307,11 @@ int parse_and_dispatch(int argc, char *argv[]) {
 
 		if (commands[c].action[0] == '\0') {
 			action_match = 1;
-			arg_offset = 1; /* objeto en pos[0], args desde pos[1] */
+			arg_offset = 1;
 		} else {
 			action_match =
 			    (npos >= 2 && strcmp(pos[1], commands[c].action) == 0);
-			arg_offset = 2; /* objeto+accion, args desde pos[2] */
+			arg_offset = 2;
 		}
 
 		if (obj_match && action_match) {

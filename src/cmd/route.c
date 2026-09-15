@@ -187,3 +187,173 @@ int route_show(int verbose, int local) {
 	iface_table_free(&ifaces);
 	return 0;
 }
+
+int route_add(const char *dst, int dst_len, const char *gw, const char *ifname,
+              int has_metric, unsigned int metric) {
+	struct iface_table ifaces;
+	iface_table_init(&ifaces);
+	if (iface_table_load(&ifaces) < 0) {
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	int ifindex = -1;
+	for (int i = 0; i < ifaces.count; i++)
+		if (strcmp(ifaces.items[i].name, ifname) == 0) {
+			ifindex = ifaces.items[i].index;
+			break;
+		}
+	iface_table_free(&ifaces);
+	if (ifindex == -1) {
+		fprintf(stderr, "interface not found: %s\n", ifname);
+		return -1;
+	}
+
+	struct in_addr dstaddr;
+	int is_default = (dst == NULL); /* NULL = default (0.0.0.0/0) */
+	if (!is_default) {
+		if (inet_pton(AF_INET, dst, &dstaddr) != 1) {
+			fprintf(stderr, "invalid address: %s\n", dst);
+			return -1;
+		}
+	}
+
+	struct in_addr gwaddr;
+	int has_gw = (gw != NULL);
+	if (has_gw) {
+		if (inet_pton(AF_INET, gw, &gwaddr) != 1) {
+			fprintf(stderr, "invalid gateway: %s\n", gw);
+			return -1;
+		}
+	}
+
+	char buf[256];
+	memset(buf, 0, sizeof(buf));
+
+	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
+	nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+	nlh->nlmsg_type = RTM_NEWROUTE;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE;
+
+	struct rtmsg *rtm = NLMSG_DATA(nlh);
+	rtm->rtm_family = AF_INET;
+	rtm->rtm_dst_len = is_default ? 0 : dst_len;
+	rtm->rtm_table = RT_TABLE_MAIN;
+	rtm->rtm_protocol = RTPROT_STATIC;
+	rtm->rtm_scope = has_gw ? RT_SCOPE_UNIVERSE : RT_SCOPE_LINK;
+	rtm->rtm_type = RTN_UNICAST;
+
+	if (!is_default)
+		netlink_add_attr(nlh, sizeof(buf), RTA_DST, &dstaddr, sizeof(dstaddr));
+	if (has_gw)
+		netlink_add_attr(nlh, sizeof(buf), RTA_GATEWAY, &gwaddr,
+		                 sizeof(gwaddr));
+
+	int oif = ifindex;
+	netlink_add_attr(nlh, sizeof(buf), RTA_OIF, &oif, sizeof(oif));
+
+	if (has_metric)
+		netlink_add_attr(nlh, sizeof(buf), RTA_PRIORITY, &metric,
+		                 sizeof(metric));
+
+	return netlink_send_change(nlh);
+}
+
+int route_del(const char *dst, int dst_len, const char *ifname, int table) {
+	int is_default = (dst == NULL);
+
+	struct in_addr dstaddr;
+	if (!is_default) {
+		if (inet_pton(AF_INET, dst, &dstaddr) != 1) {
+			fprintf(stderr, "invalid address: %s\n", dst);
+			return -1;
+		}
+	}
+
+	int ifindex = -1;
+	if (ifname != NULL) {
+		struct iface_table ifaces;
+		iface_table_init(&ifaces);
+		if (iface_table_load(&ifaces) < 0) {
+			iface_table_free(&ifaces);
+			return -1;
+		}
+		for (int i = 0; i < ifaces.count; i++)
+			if (strcmp(ifaces.items[i].name, ifname) == 0) {
+				ifindex = ifaces.items[i].index;
+				break;
+			}
+		iface_table_free(&ifaces);
+		if (ifindex == -1) {
+			fprintf(stderr, "interface not found: %s\n", ifname);
+			return -1;
+		}
+	}
+
+	char buf[256];
+	memset(buf, 0, sizeof(buf));
+
+	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
+	nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+	nlh->nlmsg_type = RTM_DELROUTE;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+
+	struct rtmsg *rtm = NLMSG_DATA(nlh);
+	rtm->rtm_family = AF_INET;
+	rtm->rtm_dst_len = is_default ? 0 : dst_len;
+	rtm->rtm_table = table;
+	rtm->rtm_scope = RT_SCOPE_NOWHERE;
+
+	if (!is_default)
+		netlink_add_attr(nlh, sizeof(buf), RTA_DST, &dstaddr, sizeof(dstaddr));
+	if (ifindex != -1) {
+		int oif = ifindex;
+		netlink_add_attr(nlh, sizeof(buf), RTA_OIF, &oif, sizeof(oif));
+	}
+
+	return netlink_send_change(nlh);
+}
+
+int route_flush(const char *ifname, int all) {
+	struct iface_table ifaces;
+	iface_table_init(&ifaces);
+	if (iface_table_load(&ifaces) < 0) {
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	int ifindex = -1;
+	for (int i = 0; i < ifaces.count; i++)
+		if (strcmp(ifaces.items[i].name, ifname) == 0) {
+			ifindex = ifaces.items[i].index;
+			break;
+		}
+	iface_table_free(&ifaces);
+	if (ifindex == -1) {
+		fprintf(stderr, "interface not found: %s\n", ifname);
+		return -1;
+	}
+
+	struct route_table routes;
+	route_table_init(&routes);
+	if (route_table_load(&routes) < 0) {
+		route_table_free(&routes);
+		return -1;
+	}
+
+	int ret = 0;
+	for (int i = 0; i < routes.count; i++) {
+		struct route_entry *r = &routes.items[i];
+		if (r->oif != ifindex)
+			continue;
+		if (r->family != AF_INET)
+			continue;
+		if (!all && r->table != RT_TABLE_MAIN)
+			continue;
+
+		const char *dst = (r->dst[0] == '\0') ? NULL : r->dst;
+		if (route_del(dst, r->dst_len, ifname, r->table) < 0)
+			ret = -1;
+	}
+
+	route_table_free(&routes);
+	return ret;
+}
