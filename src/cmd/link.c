@@ -7,6 +7,7 @@
 #include <linux/if_arp.h>
 #include <linux/rtnetlink.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -61,6 +62,19 @@ static void print_all_flags(unsigned int flags) {
 		}
 	}
 	printf(">\n");
+}
+
+static int parse_mac(const char *str, unsigned char mac[6]) {
+	int values[6];
+	if (sscanf(str, "%x:%x:%x:%x:%x:%x", &values[0], &values[1], &values[2],
+	           &values[3], &values[4], &values[5]) != 6)
+		return -1;
+	for (int i = 0; i < 6; i++) {
+		if (values[i] < 0 || values[i] > 255)
+			return -1;
+		mac[i] = (unsigned char)values[i];
+	}
+	return 0;
 }
 
 static void print_link(struct nlmsghdr *nlh, void *ctx) {
@@ -229,4 +243,88 @@ int link_show(int verbose) {
 	close(fd);
 	iface_table_free(&ifaces);
 	return ret;
+}
+
+static int link_set_state(const char *ifname, int up) {
+	struct iface_table ifaces;
+	iface_table_init(&ifaces);
+	if (iface_table_load(&ifaces) < 0) {
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	int ifindex = -1;
+	for (int i = 0; i < ifaces.count; i++)
+		if (strcmp(ifaces.items[i].name, ifname) == 0) {
+			ifindex = ifaces.items[i].index;
+			break;
+		}
+	iface_table_free(&ifaces);
+
+	if (ifindex == -1) {
+		fprintf(stderr, "interface not found: %s\n", ifname);
+		return -1;
+	}
+
+	char buf[256];
+	memset(buf, 0, sizeof(buf));
+
+	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
+	nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	nlh->nlmsg_type = RTM_NEWLINK;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+
+	struct ifinfomsg *ifi = NLMSG_DATA(nlh);
+	ifi->ifi_family = AF_UNSPEC;
+	ifi->ifi_index = ifindex;
+	ifi->ifi_change = IFF_UP;
+	ifi->ifi_flags = up ? IFF_UP : 0;
+
+	return netlink_send_change(nlh);
+}
+
+int link_up(const char *ifname) { return link_set_state(ifname, 1); }
+
+int link_down(const char *ifname) { return link_set_state(ifname, 0); }
+
+int link_set_mac(const char *ifname, const char *macstr) {
+	unsigned char mac[6];
+	if (parse_mac(macstr, mac) < 0) {
+		fprintf(stderr, "invalid MAC address: %s\n", macstr);
+		return -1;
+	}
+
+	struct iface_table ifaces;
+	iface_table_init(&ifaces);
+	if (iface_table_load(&ifaces) < 0) {
+		iface_table_free(&ifaces);
+		return -1;
+	}
+	int ifindex = -1;
+	for (int i = 0; i < ifaces.count; i++)
+		if (strcmp(ifaces.items[i].name, ifname) == 0) {
+			ifindex = ifaces.items[i].index;
+			break;
+		}
+	iface_table_free(&ifaces);
+
+	if (ifindex == -1) {
+		fprintf(stderr, "interface not found: %s\n", ifname);
+		return -1;
+	}
+
+	char buf[256];
+	memset(buf, 0, sizeof(buf));
+
+	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
+	nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	nlh->nlmsg_type = RTM_NEWLINK;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+
+	struct ifinfomsg *ifi = NLMSG_DATA(nlh);
+	ifi->ifi_family = AF_UNSPEC;
+	ifi->ifi_index = ifindex;
+
+	netlink_add_attr(nlh, sizeof(buf), IFLA_ADDRESS, mac, 6);
+
+	return netlink_send_change(nlh);
 }

@@ -80,6 +80,41 @@ static int cmd_addr_flush(int flags, char **args, int nargs) {
 	return addr_flush(args[1]) < 0 ? 1 : 0;
 }
 
+static int cmd_link_up(int flags, char **args, int nargs) {
+	(void)flags;
+	if (nargs != 1) {
+		fprintf(stderr, "usage: tundra-ip link up <interface>\n");
+		return 1;
+	}
+	return link_up(args[0]) < 0 ? 1 : 0;
+}
+
+static int cmd_link_down(int flags, char **args, int nargs) {
+	(void)flags;
+	if (nargs != 1) {
+		fprintf(stderr, "usage: tundra-ip link down <interface>\n");
+		return 1;
+	}
+	return link_down(args[0]) < 0 ? 1 : 0;
+}
+
+static int cmd_link_set_mac(int flags, char **args, int nargs) {
+	(void)flags;
+
+	if (nargs >= 1 && strcmp(args[0], "mac") == 0) {
+		/* link set mac <mac> on <if> */
+		if (nargs != 4 || strcmp(args[2], "on") != 0) {
+			fprintf(stderr,
+			        "usage: tundra-ip link set mac <mac> on <interface>\n");
+			return 1;
+		}
+		return link_set_mac(args[3], args[1]) < 0 ? 1 : 0;
+	}
+
+	fprintf(stderr, "usage: tundra-ip link set mac <mac> on <interface>\n");
+	return 1;
+}
+
 struct flag_def {
 	const char *name;
 	int bit;
@@ -105,6 +140,9 @@ static const struct command commands[] = {
     {"addr", "add", 0, cmd_addr_add},
     {"addr", "del", 0, cmd_addr_del},
     {"addr", "flush", 0, cmd_addr_flush},
+    {"link", "up", 0, cmd_link_up},
+    {"link", "down", 0, cmd_link_down},
+    {"link", "set", 0, cmd_link_set_mac},
 };
 
 static void print_flag_names(int mask) {
