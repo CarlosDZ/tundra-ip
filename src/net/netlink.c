@@ -87,3 +87,53 @@ int netlink_dump(int type, int family,
 	close(fd);
 	return ret;
 }
+
+int netlink_add_attr(struct nlmsghdr *nlh, size_t maxlen, int type,
+                     const void *data, int datalen) {
+	int len = RTA_LENGTH(datalen);
+	struct rtattr *rta;
+
+	if (NLMSG_ALIGN(nlh->nlmsg_len) + RTA_ALIGN(len) > maxlen)
+		return -1;
+
+	rta = (struct rtattr *)((char *)nlh + NLMSG_ALIGN(nlh->nlmsg_len));
+	rta->rta_type = type;
+	rta->rta_len = len;
+	memcpy(RTA_DATA(rta), data, datalen);
+
+	nlh->nlmsg_len = NLMSG_ALIGN(nlh->nlmsg_len) + RTA_ALIGN(len);
+	return 0;
+}
+
+int netlink_send_change(struct nlmsghdr *nlh) {
+	int fd = netlink_open();
+	if (fd < 0)
+		return -1;
+
+	if (send(fd, nlh, nlh->nlmsg_len, 0) < 0) {
+		perror("send");
+		close(fd);
+		return -1;
+	}
+
+	char buf[4096];
+	ssize_t len = recv(fd, buf, sizeof(buf), 0);
+	close(fd);
+
+	if (len < 0) {
+		perror("recv");
+		return -1;
+	}
+
+	struct nlmsghdr *resp = (struct nlmsghdr *)buf;
+	if (resp->nlmsg_type == NLMSG_ERROR) {
+		struct nlmsgerr *err = NLMSG_DATA(resp);
+		if (err->error != 0) {
+			fprintf(stderr, "netlink: %s\n", strerror(-err->error));
+			return -1;
+		}
+		return 0;
+	}
+
+	return 0;
+}

@@ -3,17 +3,52 @@
 #include "cmd/commands.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-static int cmd_link_show(int flags) { return link_show(flags & FLAG_VERBOSE); }
+static int cmd_link_show(int flags, char **args, int nargs) {
+	(void)args;
+	(void)nargs;
+	return link_show(flags & FLAG_VERBOSE);
+}
 
-static int cmd_addr_show(int flags) { return addr_show(flags & FLAG_VERBOSE); }
+static int cmd_addr_show(int flags, char **args, int nargs) {
+	(void)args;
+	(void)nargs;
+	return addr_show(flags & FLAG_VERBOSE);
+}
 
-static int cmd_route_show(int flags) {
+static int cmd_route_show(int flags, char **args, int nargs) {
+	(void)args;
+	(void)nargs;
 	return route_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
 }
-static int cmd_status(int flags) {
+static int cmd_status(int flags, char **args, int nargs) {
+	(void)args;
+	(void)nargs;
 	return status_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
+}
+
+static int cmd_addr_add(int flags, char **args, int nargs) {
+	(void)flags;
+
+	if (nargs != 3 || strcmp(args[1], "on") != 0) {
+		fprintf(stderr,
+		        "usage: tundra-ip addr add <IP>/<prefix> on <interface>\n");
+		return 1;
+	}
+
+	char ipbuf[64];
+	snprintf(ipbuf, sizeof(ipbuf), "%s", args[0]);
+	char *slash = strchr(ipbuf, '/');
+	if (!slash) {
+		fprintf(stderr, "missing prefix: %s (expected IP/prefix)\n", args[0]);
+		return 1;
+	}
+	*slash = '\0';
+	int prefixlen = atoi(slash + 1);
+
+	return addr_add(ipbuf, prefixlen, args[2]) < 0 ? 1 : 0;
 }
 
 struct flag_def {
@@ -30,7 +65,7 @@ struct command {
 	const char *obj;
 	const char *action;
 	int allowed_flags;
-	int (*handler)(int flags);
+	int (*handler)(int flags, char **args, int nargs);
 };
 
 static const struct command commands[] = {
@@ -38,6 +73,7 @@ static const struct command commands[] = {
     {"addr", "show", FLAG_VERBOSE, cmd_addr_show},
     {"route", "show", FLAG_VERBOSE | FLAG_LOCAL, cmd_route_show},
     {"status", "", FLAG_VERBOSE | FLAG_LOCAL, cmd_status},
+    {"addr", "add", 0, cmd_addr_add},
 };
 
 static void print_flag_names(int mask) {
@@ -90,11 +126,16 @@ int parse_and_dispatch(int argc, char *argv[]) {
 	for (size_t c = 0; c < sizeof(commands) / sizeof(commands[0]); c++) {
 		int obj_match = strcmp(pos[0], commands[c].obj) == 0;
 		int action_match;
-		if (commands[c].action[0] == '\0')
+		int arg_offset;
+
+		if (commands[c].action[0] == '\0') {
 			action_match = 1;
-		else
+			arg_offset = 1; /* objeto en pos[0], args desde pos[1] */
+		} else {
 			action_match =
 			    (npos >= 2 && strcmp(pos[1], commands[c].action) == 0);
+			arg_offset = 2; /* objeto+accion, args desde pos[2] */
+		}
 
 		if (obj_match && action_match) {
 			int bad = flags & ~commands[c].allowed_flags;
@@ -111,7 +152,9 @@ int parse_and_dispatch(int argc, char *argv[]) {
 				fprintf(stderr, "\n");
 				return 1;
 			}
-			return commands[c].handler(flags) < 0 ? 1 : 0;
+			char **cmd_args = pos + arg_offset;
+			int cmd_nargs = npos - arg_offset;
+			return commands[c].handler(flags, cmd_args, cmd_nargs) < 0 ? 1 : 0;
 		}
 	}
 
