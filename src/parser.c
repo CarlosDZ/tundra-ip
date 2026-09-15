@@ -29,26 +29,44 @@ static int cmd_status(int flags, char **args, int nargs) {
 	return status_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
 }
 
+static int parse_addr_args(char **args, int nargs, char *ip_out, size_t ip_size,
+                           int *prefix_out, const char **if_out) {
+	if (nargs != 3 || strcmp(args[1], "on") != 0)
+		return -1;
+	snprintf(ip_out, ip_size, "%s", args[0]);
+	char *slash = strchr(ip_out, '/');
+	if (!slash)
+		return -1;
+	*slash = '\0';
+	*prefix_out = atoi(slash + 1);
+	*if_out = args[2];
+	return 0;
+}
+
 static int cmd_addr_add(int flags, char **args, int nargs) {
 	(void)flags;
-
-	if (nargs != 3 || strcmp(args[1], "on") != 0) {
+	char ip[64];
+	int prefix;
+	const char *ifname;
+	if (parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname) < 0) {
 		fprintf(stderr,
 		        "usage: tundra-ip addr add <IP>/<prefix> on <interface>\n");
 		return 1;
 	}
+	return addr_add(ip, prefix, ifname) < 0 ? 1 : 0;
+}
 
-	char ipbuf[64];
-	snprintf(ipbuf, sizeof(ipbuf), "%s", args[0]);
-	char *slash = strchr(ipbuf, '/');
-	if (!slash) {
-		fprintf(stderr, "missing prefix: %s (expected IP/prefix)\n", args[0]);
+static int cmd_addr_del(int flags, char **args, int nargs) {
+	(void)flags;
+	char ip[64];
+	int prefix;
+	const char *ifname;
+	if (parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname) < 0) {
+		fprintf(stderr,
+		        "usage: tundra-ip addr add <IP>/<prefix> on <interface>\n");
 		return 1;
 	}
-	*slash = '\0';
-	int prefixlen = atoi(slash + 1);
-
-	return addr_add(ipbuf, prefixlen, args[2]) < 0 ? 1 : 0;
+	return addr_del(ip, prefix, ifname) < 0 ? 1 : 0;
 }
 
 struct flag_def {
@@ -74,6 +92,7 @@ static const struct command commands[] = {
     {"route", "show", FLAG_VERBOSE | FLAG_LOCAL, cmd_route_show},
     {"status", "", FLAG_VERBOSE | FLAG_LOCAL, cmd_status},
     {"addr", "add", 0, cmd_addr_add},
+    {"addr", "del", 0, cmd_addr_del},
 };
 
 static void print_flag_names(int mask) {

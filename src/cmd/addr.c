@@ -113,7 +113,8 @@ int addr_show(int verbose) {
 	return 0;
 }
 
-int addr_add(const char *ip, int prefixlen, const char *ifname) {
+static int addr_modify(int type, int nl_flags, const char *ip, int prefixlen,
+                       const char *ifname) {
 	struct iface_table ifaces;
 	iface_table_init(&ifaces);
 	if (iface_table_load(&ifaces) < 0) {
@@ -144,8 +145,8 @@ int addr_add(const char *ip, int prefixlen, const char *ifname) {
 
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
 	nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
-	nlh->nlmsg_type = RTM_NEWADDR;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL;
+	nlh->nlmsg_type = type;
+	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | nl_flags;
 
 	struct ifaddrmsg *ifa = NLMSG_DATA(nlh);
 	ifa->ifa_family = AF_INET;
@@ -155,4 +156,13 @@ int addr_add(const char *ip, int prefixlen, const char *ifname) {
 	netlink_add_attr(nlh, sizeof(buf), IFA_LOCAL, &addr, sizeof(addr));
 
 	return netlink_send_change(nlh);
+}
+
+int addr_add(const char *ip, int prefixlen, const char *ifname) {
+	return addr_modify(RTM_NEWADDR, NLM_F_CREATE | NLM_F_EXCL, ip, prefixlen,
+	                   ifname);
+}
+
+int addr_del(const char *ip, int prefixlen, const char *ifname) {
+	return addr_modify(RTM_DELADDR, 0, ip, prefixlen, ifname);
 }
