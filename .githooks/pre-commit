@@ -1,0 +1,20 @@
+#!/bin/bash
+# Sincroniza la version del template con el metapkg antes de cada commit.
+set -e
+
+METAPKG=metapkg
+TEMPLATE=template   # ajusta la ruta si el template está en otro sitio
+
+# leer version del metapkg (formato: version=1.1_0)
+metaver=$(grep '^version=' "$METAPKG" | cut -d= -f2)
+
+# separar en version y revision (1.1_0 -> version=1.1, revision=0)
+ver="${metaver%_*}"    # antes del _
+rev="${metaver##*_}"   # después del _
+
+# actualizar el template
+sed -i "s/^version=.*/version=${ver}/" "$TEMPLATE"
+sed -i "s/^revision=.*/revision=${rev}/" "$TEMPLATE"
+
+# añadir el template al commit si cambió
+git add "$TEMPLATE"

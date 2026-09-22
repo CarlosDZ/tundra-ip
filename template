@@ -1,0 +1,17 @@
+# Template file for 'tundra-ip'
+pkgname=tundra-ip
+version=1.1
+revision=1
+build_style=gnu-makefile
+short_desc="Low-level network configuration tool developed for Tundra OS"
+maintainer="CarlosDZ <tu-email>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/CarlosDZ/tundra-ip"
+distfiles="https://github.com/CarlosDZ/tundra-ip/archive/refs/tags/v${version}_${revision}.tar.gz"
+checksum=a696cd2553c5b33c8bc741c7d757e9bb785e54ac699b852d67a4e96d8efb59f4
+replaces="iproute2>=0"
+provides="iproute2-9999_1"
+
+post_install() {
+	ln -sf tundra-ip ${DESTDIR}/usr/bin/ip
+}

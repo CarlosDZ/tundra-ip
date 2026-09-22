@@ -8,6 +8,7 @@ tundra-ip
 # Compilation
 /out/
 compile_commands.json
+/scripts/
 
 # Editor/OS cruft
 *.swp
