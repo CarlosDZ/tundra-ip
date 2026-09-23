@@ -2,7 +2,11 @@
 
 CC = gcc
 VERSION = $(shell grep '^version=' metapkg | cut -d= -f2)
-CFLAGS = -Wall -Wextra -std=c11 -D_GNU_SOURCE -Isrc/net -Isrc/util -Isrc/cmd -DTUNDRA_IP_VERSION=\"$(VERSION)\"
+TUNDRA_DEFS = -DTUNDRA_IP_VERSION=\"$(VERSION)\"
+
+CFLAGS ?= -Wall -Wextra -std=c11 -D_GNU_SOURCE
+CFLAGS += -Isrc/net -Isrc/util -Isrc/cmd
+
 TARGET = tundra-ip
 
 SRCS = $(wildcard src/*.c src/net/*.c src/util/*.c src/cmd/*.c)
@@ -11,12 +15,11 @@ OBJS = $(SRCS:.c=.o)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
 
-%.o: .%c
-	$(CC) $(CFLAGS) -c $< -o $@
+%.o: %.c
+	$(CC) $(CFLAGS) $(TUNDRA_DEFS) -c $< -o $@
 
 clean:
 	rm -f $(TARGET) $(OBJS)
-
 
 
 ## Instalation
@@ -36,4 +39,4 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/ip
 	rm -rf $(DESTDIR)$(PREFIX)/share/licenses/$(TARGET)
 
-.PHONY: install install-ip uninstall
+.PHONY: install install-ip uninstall clean
