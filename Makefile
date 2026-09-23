@@ -2,10 +2,12 @@
 
 CC = gcc
 VERSION = $(shell grep '^version=' metapkg | cut -d= -f2)
+
+# defines e includes propios, SIEMPRE aplicados (fuera de CFLAGS)
 TUNDRA_DEFS = -DTUNDRA_IP_VERSION=\"$(VERSION)\"
+TUNDRA_INC = -Isrc/net -Isrc/util -Isrc/cmd
 
 CFLAGS ?= -Wall -Wextra -std=c11 -D_GNU_SOURCE
-CFLAGS += -Isrc/net -Isrc/util -Isrc/cmd
 
 TARGET = tundra-ip
 
@@ -16,7 +18,7 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(TUNDRA_DEFS) -c $< -o $@
+	$(CC) $(CFLAGS) $(TUNDRA_INC) $(TUNDRA_DEFS) -c $< -o $@
 
 clean:
 	rm -f $(TARGET) $(OBJS)
