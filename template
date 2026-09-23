@@ -1,7 +1,7 @@
 # Template file for 'tundra-ip'
 pkgname=tundra-ip
 version=1.1
-revision=1
+revision=2
 build_style=gnu-makefile
 short_desc="Low-level network configuration tool developed for Tundra OS"
 maintainer="CarlosDZ <none@example.com>"
