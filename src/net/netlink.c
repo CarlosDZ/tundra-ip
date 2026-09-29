@@ -33,7 +33,7 @@ int netlink_send_dump_req(int fd, int type, int family) {
 		return -1;
 	}
 	return 0;
-};
+}
 
 ssize_t netlink_recv_msg(int fd, char *buff, size_t bufflen) {
 	ssize_t len = recv(fd, buff, bufflen, 0);
@@ -51,7 +51,7 @@ int netlink_recv_dump(int fd, void (*callback)(struct nlmsghdr *nlh, void *ctx),
 	for (;;) {
 		ssize_t len = recv(fd, buf, sizeof(buf), 0);
 		if (len < 0) {
-			perror("recv");
+			perror("recv error");
 			return -1;
 		}
 
@@ -111,7 +111,7 @@ int netlink_send_change(struct nlmsghdr *nlh) {
 		return -1;
 
 	if (send(fd, nlh, nlh->nlmsg_len, 0) < 0) {
-		perror("send");
+		perror("send error");
 		close(fd);
 		return -1;
 	}
@@ -121,7 +121,7 @@ int netlink_send_change(struct nlmsghdr *nlh) {
 	close(fd);
 
 	if (len < 0) {
-		perror("recv");
+		perror("recv error");
 		return -1;
 	}
 
