@@ -9,6 +9,7 @@ tundra-ip
 /out/
 compile_commands.json
 /scripts/
+*.d
 
 # Editor/OS cruft
 *.swp
