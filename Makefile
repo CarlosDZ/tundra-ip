@@ -1,31 +1,35 @@
 ## Compilation
-
 CC = gcc
 VERSION = $(shell grep '^version=' metapkg | cut -d= -f2)
 
-# defines e includes propios, SIEMPRE aplicados (fuera de CFLAGS)
-TUNDRA_DEFS = -DTUNDRA_IP_VERSION=\"$(VERSION)\"
+TUNDRA_STD = -std=c11
+TUNDRA_DEFS = -D_GNU_SOURCE -DTUNDRA_IP_VERSION=\"$(VERSION)\"
 TUNDRA_INC = -Isrc/net -Isrc/util -Isrc/cmd
 
-CFLAGS ?= -Wall -Wextra -std=c11 -D_GNU_SOURCE
+CFLAGS ?= -Wall -Wextra -O2
 
 TARGET = tundra-ip
 
 SRCS = $(wildcard src/*.c src/net/*.c src/util/*.c src/cmd/*.c)
 OBJS = $(SRCS:.c=.o)
+DEPS = $(OBJS:.o=.d)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(TARGET) $(OBJS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(TUNDRA_INC) $(TUNDRA_DEFS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(TUNDRA_STD) $(TUNDRA_INC) $(TUNDRA_DEFS) \
+		-MMD -MP -c $< -o $@
+
+$(OBJS): Makefile metapkg
+
+-include $(DEPS)
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET) $(OBJS) $(DEPS)
 
 
 ## Instalation
-
 PREFIX ?= /usr
 DESTDIR ?=
 
