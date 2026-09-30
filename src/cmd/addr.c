@@ -114,7 +114,8 @@ int addr_show(int verbose) {
 }
 
 static int addr_modify(int type, int nl_flags, const char *ip, int prefixlen,
-                       const char *ifname) {
+                       const char *ifname, int has_metric,
+                       unsigned int metric) {
 	struct iface_table ifaces;
 	iface_table_init(&ifaces);
 	if (iface_table_load(&ifaces) < 0) {
@@ -155,16 +156,21 @@ static int addr_modify(int type, int nl_flags, const char *ip, int prefixlen,
 
 	netlink_add_attr(nlh, sizeof(buf), IFA_LOCAL, &addr, sizeof(addr));
 
+	if (has_metric)
+		netlink_add_attr(nlh, sizeof(buf), IFA_RT_PRIORITY, &metric,
+		                 sizeof(metric));
+
 	return netlink_send_change(nlh);
 }
 
-int addr_add(const char *ip, int prefixlen, const char *ifname) {
+int addr_add(const char *ip, int prefixlen, const char *ifname, int has_metric,
+             unsigned int metric) {
 	return addr_modify(RTM_NEWADDR, NLM_F_CREATE | NLM_F_EXCL, ip, prefixlen,
-	                   ifname);
+	                   ifname, has_metric, metric);
 }
 
 int addr_del(const char *ip, int prefixlen, const char *ifname) {
-	return addr_modify(RTM_DELADDR, 0, ip, prefixlen, ifname);
+	return addr_modify(RTM_DELADDR, 0, ip, prefixlen, ifname, 0, 0);
 }
 
 int addr_flush(const char *ifname) {

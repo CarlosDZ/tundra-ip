@@ -16,7 +16,7 @@ struct object_help {
 
 static const struct action_help addr_actions[] = {
     {"addr show [--verbose]"},
-    {"addr add <IP>/<prefix> on <interface>"},
+    {"addr add <IP>/<prefix> on <interface> [metric <n>]"},
     {"addr del <IP>/<prefix> on <interface>"},
     {"addr flush on <interface>"},
 };

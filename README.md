@@ -41,7 +41,7 @@ tundra-ip status [--verbose] [--local]
 
 ```
 tundra-ip addr show [--verbose]
-tundra-ip addr add   <IP>/<prefix> on <interface>
+tundra-ip addr add   <IP>/<prefix> on <interface> [metric <n>]
 tundra-ip addr del   <IP>/<prefix> on <interface>
 tundra-ip addr flush on <interface>
 ```

@@ -2,7 +2,8 @@
 #define TUNDRA_ADDR_H
 
 int addr_show(int verbose);
-int addr_add(const char *ip, int prefixlen, const char *ifname);
+int addr_add(const char *ip, int prefixlen, const char *ifname, int has_metric,
+             unsigned int metric);
 int addr_del(const char *ip, int prefixlen, const char *ifname);
 int addr_flush(const char *ifname);
 

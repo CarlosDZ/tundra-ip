@@ -2,10 +2,29 @@
 #include "cmd/commands.h"
 #include "help.h"
 
+#include <errno.h>
 #include <linux/rtnetlink.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int parse_uint(const char *s, unsigned int min, unsigned int max,
+                      unsigned int *out) {
+	if (s == NULL || *s == '\0')
+		return -1;
+
+	errno = 0;
+	char *end;
+	unsigned long val = strtoul(s, &end, 10);
+
+	if (errno != 0 || *end != '\0')
+		return -1;
+	if (val < min || val > max)
+		return -1;
+
+	*out = (unsigned int)val;
+	return 0;
+}
 
 static int split_prefix(const char *arg, char *addr_out, size_t size,
                         int *prefix_out) {
@@ -14,7 +33,11 @@ static int split_prefix(const char *arg, char *addr_out, size_t size,
 	if (!slash)
 		return -1;
 	*slash = '\0';
-	*prefix_out = atoi(slash + 1);
+
+	unsigned int prefix;
+	if (parse_uint(slash + 1, 0, 32, &prefix) < 0)
+		return -1;
+	*prefix_out = (int)prefix;
 	return 0;
 }
 
@@ -44,13 +67,33 @@ static int cmd_status(int flags, char **args, int nargs) {
 }
 
 static int parse_addr_args(char **args, int nargs, char *ip_out, size_t ip_size,
-                           int *prefix_out, const char **if_out) {
-	if (nargs != 3 || strcmp(args[1], "on") != 0)
+                           int *prefix_out, const char **if_out,
+                           int allow_metric, int *has_metric_out,
+                           unsigned int *metric_out) {
+	/* forma base: <IP>/<prefix> on <interface>  (+ opcional: metric <n>) */
+	if (nargs < 3 || strcmp(args[1], "on") != 0)
 		return -1;
 	if (split_prefix(args[0], ip_out, ip_size, prefix_out) < 0)
 		return -1;
 	*if_out = args[2];
-	return 0;
+
+	*has_metric_out = 0;
+	*metric_out = 0;
+
+	if (nargs == 3)
+		return 0;
+
+	/* extra: solo se admite "metric <n>", y solo si allow_metric */
+	if (nargs == 5 && allow_metric && strcmp(args[3], "metric") == 0) {
+		if (parse_uint(args[4], 0, 0xFFFFFFFF, metric_out) < 0) {
+			fprintf(stderr, "invalid metric: %s\n", args[4]);
+			return -2; /* error ya reportado */
+		}
+		*has_metric_out = 1;
+		return 0;
+	}
+
+	return -1;
 }
 
 static int cmd_addr_add(int flags, char **args, int nargs) {
@@ -58,12 +101,18 @@ static int cmd_addr_add(int flags, char **args, int nargs) {
 	char ip[64];
 	int prefix;
 	const char *ifname;
-	if (parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname) < 0) {
-		fprintf(stderr,
-		        "usage: tundra-ip addr add <IP>/<prefix> on <interface>\n");
+	int has_metric;
+	unsigned int metric;
+	int r = parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname, 1,
+	                        &has_metric, &metric);
+	if (r == -1) {
+		fprintf(stderr, "usage: tundra-ip addr add <IP>/<prefix> on "
+		                "<interface> [metric <n>]\n");
 		return 1;
 	}
-	return addr_add(ip, prefix, ifname) < 0 ? 1 : 0;
+	if (r < 0)
+		return 1; /* error ya reportado (invalid metric) */
+	return addr_add(ip, prefix, ifname, has_metric, metric) < 0 ? 1 : 0;
 }
 
 static int cmd_addr_del(int flags, char **args, int nargs) {
@@ -71,9 +120,13 @@ static int cmd_addr_del(int flags, char **args, int nargs) {
 	char ip[64];
 	int prefix;
 	const char *ifname;
-	if (parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname) < 0) {
+	int has_metric;
+	unsigned int metric;
+	int r = parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname, 0,
+	                        &has_metric, &metric);
+	if (r != 0) {
 		fprintf(stderr,
-		        "usage: tundra-ip addr add <IP>/<prefix> on <interface>\n");
+		        "usage: tundra-ip addr del <IP>/<prefix> on <interface>\n");
 		return 1;
 	}
 	return addr_del(ip, prefix, ifname) < 0 ? 1 : 0;
@@ -157,7 +210,10 @@ static int cmd_route_add(int flags, char **args, int nargs) {
 		} else if (strcmp(args[i], "on") == 0 && i + 1 < nargs) {
 			ifname = args[++i];
 		} else if (strcmp(args[i], "metric") == 0 && i + 1 < nargs) {
-			metric = (unsigned int)atoi(args[++i]);
+			if (parse_uint(args[++i], 0, 0xFFFFFFFF, &metric) < 0) {
+				fprintf(stderr, "invalid metric: %s\n", args[i]);
+				return 1;
+			}
 			has_metric = 1;
 		} else {
 			fprintf(stderr, "unexpected argument: %s\n", args[i]);
