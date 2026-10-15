@@ -46,24 +46,25 @@ static void print_version(void) { printf("tundra-ip %s\n", TUNDRA_IP_VERSION); }
 static int cmd_link_show(int flags, char **args, int nargs) {
 	(void)args;
 	(void)nargs;
-	return link_show(flags & FLAG_VERBOSE);
+	return link_show(flags & FLAG_VERBOSE) < 0 ? 1 : 0;
 }
 
 static int cmd_addr_show(int flags, char **args, int nargs) {
 	(void)args;
 	(void)nargs;
-	return addr_show(flags & FLAG_VERBOSE);
+	return addr_show(flags & FLAG_VERBOSE) < 0 ? 1 : 0;
 }
 
 static int cmd_route_show(int flags, char **args, int nargs) {
 	(void)args;
 	(void)nargs;
-	return route_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
+	return route_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL) < 0 ? 1 : 0;
 }
+
 static int cmd_status(int flags, char **args, int nargs) {
 	(void)args;
 	(void)nargs;
-	return status_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL);
+	return status_show(flags & FLAG_VERBOSE, flags & FLAG_LOCAL) < 0 ? 1 : 0;
 }
 
 static int parse_addr_args(char **args, int nargs, char *ip_out, size_t ip_size,
@@ -406,7 +407,7 @@ int parse_and_dispatch(int argc, char *argv[]) {
 			}
 			char **cmd_args = pos + arg_offset;
 			int cmd_nargs = npos - arg_offset;
-			return commands[c].handler(flags, cmd_args, cmd_nargs) < 0 ? 1 : 0;
+			return commands[c].handler(flags, cmd_args, cmd_nargs);
 		}
 	}
 

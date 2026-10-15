@@ -1,6 +1,6 @@
 name=tundra-ip
 author=CarlosDZ
-version=1.2_0
-v_date=2026-09-30
+version=1.2_1
+v_date=2026-10-15
 license=GLP-3.0-or-later
 description=Low-level network configuration tool developed for Tundra OS
