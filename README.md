@@ -40,21 +40,24 @@ tundra-ip status [--verbose] [--local]
 ### addr
 
 ```
-tundra-ip addr show [--verbose]
-tundra-ip addr add   <IP>/<prefix> on <interface> [metric <n>]
-tundra-ip addr del   <IP>/<prefix> on <interface>
-tundra-ip addr flush on <interface>
+tundra-ip addr show    [--verbose]
+tundra-ip addr add     <IP>/<prefix> on <interface> [metric <n>]
+tundra-ip addr replace <IP>/<prefix> on <interface> [metric <n>]
+tundra-ip addr del     <IP>/<prefix> on <interface>
+tundra-ip addr flush   on <interface>
 ```
 
 ### route
 
 ```
-tundra-ip route show [--verbose] [--local]
-tundra-ip route add   <net>/<prefix> [via <gateway>] on <interface> [metric <n>]
-tundra-ip route add   default via <gateway> on <interface> [metric <n>]
-tundra-ip route del   <net>/<prefix> [on <interface>]
-tundra-ip route del   default [on <interface>]
-tundra-ip route flush on <interface> [--all]
+tundra-ip route show    [--verbose] [--local]
+tundra-ip route add     <net>/<prefix> [via <gateway>] on <interface> [metric <n>]
+tundra-ip route add     default via <gateway> on <interface> [metric <n>]
+tundra-ip route replace <net>/<prefix> [via <gateway>] on <interface> [metric <n>]
+tundra-ip route replace default via <gateway> on <interface> [metric <n>]
+tundra-ip route del     <net>/<prefix> [on <interface>]
+tundra-ip route del     default [on <interface>]
+tundra-ip route flush   on <interface> [--all]
 ```
 
 - `default` is a destination shorthand for `0.0.0.0/0`.

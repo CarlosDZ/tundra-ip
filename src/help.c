@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define ARR_SIZE(a) ((int)(sizeof(a) / sizeof((a)[0])))
+
 struct action_help {
 	const char *usage;
 };
@@ -17,6 +19,7 @@ struct object_help {
 static const struct action_help addr_actions[] = {
     {"addr show [--verbose]"},
     {"addr add <IP>/<prefix> on <interface> [metric <n>]"},
+    {"addr replace <IP>/<prefix> on <interface> [metric <n>]"},
     {"addr del <IP>/<prefix> on <interface>"},
     {"addr flush on <interface>"},
 };
@@ -24,6 +27,7 @@ static const struct action_help addr_actions[] = {
 static const struct action_help route_actions[] = {
     {"route show [--verbose] [--local]"},
     {"route add <net>/<prefix> [via <gw>] on <interface> [metric <n>]"},
+    {"route replace <net>/<prefix> [via <gw>] on <interface> [metric <n>]"},
     {"route del <net>/<prefix> [on <interface>]"},
     {"route flush on <interface> [--all]"},
 };
@@ -40,10 +44,11 @@ static const struct action_help status_actions[] = {
 };
 
 static const struct object_help help_tree[] = {
-    {"status", "unified per-interface network view", status_actions, 1},
-    {"addr", "manage addresses", addr_actions, 4},
-    {"route", "manage routes", route_actions, 4},
-    {"link", "manage interfaces", link_actions, 4},
+    {"status", "unified per-interface network view", status_actions,
+     ARR_SIZE(status_actions)},
+    {"addr", "manage addresses", addr_actions, ARR_SIZE(addr_actions)},
+    {"route", "manage routes", route_actions, ARR_SIZE(route_actions)},
+    {"link", "manage interfaces", link_actions, ARR_SIZE(link_actions)},
 };
 
 static void help_level0(void) {

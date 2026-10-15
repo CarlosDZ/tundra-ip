@@ -189,7 +189,7 @@ int route_show(int verbose, int local) {
 }
 
 int route_add(const char *dst, int dst_len, const char *gw, const char *ifname,
-              int has_metric, unsigned int metric) {
+              int has_metric, unsigned int metric, int replace) {
 	struct iface_table ifaces;
 	iface_table_init(&ifaces);
 	if (iface_table_load(&ifaces) < 0) {
@@ -232,7 +232,9 @@ int route_add(const char *dst, int dst_len, const char *gw, const char *ifname,
 	struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
 	nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
 	nlh->nlmsg_type = RTM_NEWROUTE;
-	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE;
+	int excl_or_replace = replace ? NLM_F_REPLACE : NLM_F_EXCL;
+	nlh->nlmsg_flags =
+	    NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | excl_or_replace;
 
 	struct rtmsg *rtm = NLMSG_DATA(nlh);
 	rtm->rtm_family = AF_INET;

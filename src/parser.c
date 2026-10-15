@@ -71,7 +71,6 @@ static int parse_addr_args(char **args, int nargs, char *ip_out, size_t ip_size,
                            int *prefix_out, const char **if_out,
                            int allow_metric, int *has_metric_out,
                            unsigned int *metric_out) {
-	/* forma base: <IP>/<prefix> on <interface>  (+ opcional: metric <n>) */
 	if (nargs < 3 || strcmp(args[1], "on") != 0)
 		return -1;
 	if (split_prefix(args[0], ip_out, ip_size, prefix_out) < 0)
@@ -84,11 +83,10 @@ static int parse_addr_args(char **args, int nargs, char *ip_out, size_t ip_size,
 	if (nargs == 3)
 		return 0;
 
-	/* extra: solo se admite "metric <n>", y solo si allow_metric */
 	if (nargs == 5 && allow_metric && strcmp(args[3], "metric") == 0) {
 		if (parse_uint(args[4], 0, 0xFFFFFFFF, metric_out) < 0) {
 			fprintf(stderr, "invalid metric: %s\n", args[4]);
-			return -2; /* error ya reportado */
+			return -2;
 		}
 		*has_metric_out = 1;
 		return 0;
@@ -112,7 +110,7 @@ static int cmd_addr_add(int flags, char **args, int nargs) {
 		return 1;
 	}
 	if (r < 0)
-		return 1; /* error ya reportado (invalid metric) */
+		return 1;
 	return addr_add(ip, prefix, ifname, has_metric, metric) < 0 ? 1 : 0;
 }
 
@@ -144,6 +142,25 @@ static int cmd_addr_flush(int flags, char **args, int nargs) {
 	return addr_flush(args[1]) < 0 ? 1 : 0;
 }
 
+static int cmd_addr_replace(int flags, char **args, int nargs) {
+	(void)flags;
+	char ip[64];
+	int prefix;
+	const char *ifname;
+	int has_metric;
+	unsigned int metric;
+	int r = parse_addr_args(args, nargs, ip, sizeof(ip), &prefix, &ifname, 1,
+	                        &has_metric, &metric);
+	if (r == -1) {
+		fprintf(stderr, "usage: tundra-ip addr replace <IP>/<prefix> on "
+		                "<interface> [metric <n>]\n");
+		return 1;
+	}
+	if (r < 0)
+		return 1;
+	return addr_replace(ip, prefix, ifname, has_metric, metric) < 0 ? 1 : 0;
+}
+
 static int cmd_link_up(int flags, char **args, int nargs) {
 	(void)flags;
 	if (nargs != 1) {
@@ -166,7 +183,6 @@ static int cmd_link_set_mac(int flags, char **args, int nargs) {
 	(void)flags;
 
 	if (nargs >= 1 && strcmp(args[0], "mac") == 0) {
-		/* link set mac <mac> on <if> */
 		if (nargs != 4 || strcmp(args[2], "on") != 0) {
 			fprintf(stderr,
 			        "usage: tundra-ip link set mac <mac> on <interface>\n");
@@ -179,59 +195,104 @@ static int cmd_link_set_mac(int flags, char **args, int nargs) {
 	return 1;
 }
 
+static int parse_route_args(char **args, int nargs, const char **dst_out,
+                            char *netbuf, size_t netsize, int *prefix_out,
+                            const char **gw_out, const char **if_out,
+                            int *has_metric_out, unsigned int *metric_out) {
+	if (nargs < 1)
+		return -1;
+
+	*dst_out = NULL;
+	*prefix_out = 0;
+	if (strcmp(args[0], "default") != 0) {
+		if (split_prefix(args[0], netbuf, netsize, prefix_out) < 0) {
+			fprintf(stderr, "missing prefix: %s (expected net/prefix)\n",
+			        args[0]);
+			return -2;
+		}
+		*dst_out = netbuf;
+	}
+
+	*gw_out = NULL;
+	*if_out = NULL;
+	*has_metric_out = 0;
+	*metric_out = 0;
+
+	for (int i = 1; i < nargs; i++) {
+		if (strcmp(args[i], "via") == 0 && i + 1 < nargs) {
+			*gw_out = args[++i];
+		} else if (strcmp(args[i], "on") == 0 && i + 1 < nargs) {
+			*if_out = args[++i];
+		} else if (strcmp(args[i], "metric") == 0 && i + 1 < nargs) {
+			if (parse_uint(args[++i], 0, 0xFFFFFFFF, metric_out) < 0) {
+				fprintf(stderr, "invalid metric: %s\n", args[i]);
+				return -2;
+			}
+			*has_metric_out = 1;
+		} else {
+			fprintf(stderr, "unexpected argument: %s\n", args[i]);
+			return -2;
+		}
+	}
+
+	if (*if_out == NULL) {
+		fprintf(stderr, "missing 'on <interface>'\n");
+		return -2;
+	}
+	if (*dst_out == NULL && *gw_out == NULL) {
+		fprintf(stderr, "default route requires 'via <gateway>'\n");
+		return -2;
+	}
+
+	return 0;
+}
+
 static int cmd_route_add(int flags, char **args, int nargs) {
 	(void)flags;
+	const char *dst;
+	int prefix;
+	char netbuf[64];
+	const char *gw;
+	const char *ifname;
+	int has_metric;
+	unsigned int metric;
 
-	if (nargs < 1) {
+	int r = parse_route_args(args, nargs, &dst, netbuf, sizeof(netbuf), &prefix,
+	                         &gw, &ifname, &has_metric, &metric);
+	if (r == -1) {
 		fprintf(stderr, "usage: tundra-ip route add <net>/<prefix>|default "
 		                "[via <gw>] on <interface> [metric <n>]\n");
 		return 1;
 	}
+	if (r < 0)
+		return 1;
 
-	const char *dst = NULL;
-	int prefix = 0;
+	return route_add(dst, prefix, gw, ifname, has_metric, metric, 0) < 0 ? 1
+	                                                                     : 0;
+}
+
+static int cmd_route_replace(int flags, char **args, int nargs) {
+	(void)flags;
+	const char *dst;
+	int prefix;
 	char netbuf[64];
-	if (strcmp(args[0], "default") != 0) {
-		if (split_prefix(args[0], netbuf, sizeof(netbuf), &prefix) < 0) {
-			fprintf(stderr, "missing prefix: %s (expected net/prefix)\n",
-			        args[0]);
-			return 1;
-		}
-		dst = netbuf;
-	}
+	const char *gw;
+	const char *ifname;
+	int has_metric;
+	unsigned int metric;
 
-	const char *gw = NULL;
-	const char *ifname = NULL;
-	int has_metric = 0;
-	unsigned int metric = 0;
-
-	for (int i = 1; i < nargs; i++) {
-		if (strcmp(args[i], "via") == 0 && i + 1 < nargs) {
-			gw = args[++i];
-		} else if (strcmp(args[i], "on") == 0 && i + 1 < nargs) {
-			ifname = args[++i];
-		} else if (strcmp(args[i], "metric") == 0 && i + 1 < nargs) {
-			if (parse_uint(args[++i], 0, 0xFFFFFFFF, &metric) < 0) {
-				fprintf(stderr, "invalid metric: %s\n", args[i]);
-				return 1;
-			}
-			has_metric = 1;
-		} else {
-			fprintf(stderr, "unexpected argument: %s\n", args[i]);
-			return 1;
-		}
-	}
-
-	if (ifname == NULL) {
-		fprintf(stderr, "missing 'on <interface>'\n");
+	int r = parse_route_args(args, nargs, &dst, netbuf, sizeof(netbuf), &prefix,
+	                         &gw, &ifname, &has_metric, &metric);
+	if (r == -1) {
+		fprintf(stderr, "usage: tundra-ip route replace <net>/<prefix>|default "
+		                "[via <gw>] on <interface> [metric <n>]\n");
 		return 1;
 	}
-	if (dst == NULL && gw == NULL) {
-		fprintf(stderr, "default route requires 'via <gateway>'\n");
+	if (r < 0)
 		return 1;
-	}
 
-	return route_add(dst, prefix, gw, ifname, has_metric, metric) < 0 ? 1 : 0;
+	return route_add(dst, prefix, gw, ifname, has_metric, metric, 1) < 0 ? 1
+	                                                                     : 0;
 }
 
 static int cmd_route_del(int flags, char **args, int nargs) {
@@ -302,12 +363,14 @@ static const struct command commands[] = {
     {"route", "show", FLAG_VERBOSE | FLAG_LOCAL, cmd_route_show},
     {"status", "", FLAG_VERBOSE | FLAG_LOCAL, cmd_status},
     {"addr", "add", 0, cmd_addr_add},
+    {"addr", "replace", 0, cmd_addr_replace},
     {"addr", "del", 0, cmd_addr_del},
     {"addr", "flush", 0, cmd_addr_flush},
     {"link", "up", 0, cmd_link_up},
     {"link", "down", 0, cmd_link_down},
     {"link", "set", 0, cmd_link_set_mac},
     {"route", "add", 0, cmd_route_add},
+    {"route", "replace", 0, cmd_route_replace},
     {"route", "del", 0, cmd_route_del},
     {"route", "flush", FLAG_ALL, cmd_route_flush},
 };

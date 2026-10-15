@@ -214,3 +214,9 @@ int addr_flush(const char *ifname) {
 	addr_table_free(&addrs);
 	return ret;
 }
+
+int addr_replace(const char *ip, int prefixlen, const char *ifname,
+                 int has_metric, unsigned int metric) {
+	return addr_modify(RTM_NEWADDR, NLM_F_CREATE | NLM_F_REPLACE, ip, prefixlen,
+	                   ifname, has_metric, metric);
+}
